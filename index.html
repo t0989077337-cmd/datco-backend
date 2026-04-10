@@ -204,9 +204,9 @@
             }
         }
 
-        // 初始化並設定每 30 秒自動更新
-        updateDashboard();
-        setInterval(updateDashboard, 30000);
+        // ✅ 新的：300000 (5分鐘)
+        updateDashboard(); // 網頁開啟時先跑一次
+        setInterval(updateDashboard, 300000);
     </script>
 </body>
 </html>

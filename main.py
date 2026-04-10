@@ -126,13 +126,41 @@ def fetch_bitcoin_network_health():
         print(f"Network Data Error: {e}")
         return {"hashrate_eh": 0, "difficulty": 0, "total_supply": 0, "mining_cost_usd": 0}
 
+# 在檔案上方、app 定義之後，加入這三個全域變數
+cached_data = None
+last_fetch_time = 0
+CACHE_DURATION = 300  # 快取時間設定為 300 秒 (5 分鐘)
+
 @app.get("/api/treasury")
 def get_treasury():
-    return {
-        "companies": fetch_data_from_coingecko(),
-        "market": fetch_market_indicators(),
-        "network": fetch_bitcoin_network_health()
-    }
+    global cached_data, last_fetch_time
+    current_time = time.time()
+
+    # 如果距離上次抓取還不到 5 分鐘，且已經有快取資料，就直接回傳
+    if cached_data and (current_time - last_fetch_time < CACHE_DURATION):
+        print("回傳快取資料中...")
+        return cached_data
+
+    # 否則，去抓新的資料
+    print("抓取新資料中 (5 分鐘週期已到)...")
+    try:
+        c_data = fetch_data_from_coingecko()
+        m_data = fetch_market_indicators()
+        n_data = fetch_bitcoin_network_health()
+        
+        # 存入快取
+        cached_data = {
+            "companies": c_data,
+            "market": m_data,
+            "network": n_data
+        }
+        last_fetch_time = current_time
+        return cached_data
+    except Exception as e:
+        # 如果抓取失敗但有舊資料，就先給舊的，不要讓網頁報錯
+        if cached_data:
+            return cached_data
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
