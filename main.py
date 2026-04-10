@@ -30,13 +30,21 @@ def get_jpy_exchange_rate():
 
 def fetch_data_from_coingecko():
     t_url = "https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin"
-    p_url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
     
     try:
-        t_res = requests.get(t_url, timeout=10).json()
-        p_res = requests.get(p_url, timeout=10).json()
-        btc_price = p_res.get('bitcoin', {}).get('usd', 0)
+        # 1. 改用 yfinance 獲取比特幣即時價格 (BTC-USD)
+        btc_ticker = yf.Ticker("BTC-USD")
+        # 優先嘗試 fast_info 獲取價格，若失敗則用 info
+        btc_price = btc_ticker.fast_info.get('last_price') or btc_ticker.info.get('regularMarketPrice') or 0
         
+        # 如果 yfinance 還是抓不到 (極低機率)，可以保留原有的 CoinGecko 當備援
+        if btc_price == 0:
+            p_url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+            p_res = requests.get(p_url, timeout=10).json()
+            btc_price = p_res.get('bitcoin', {}).get('usd', 0)
+
+        # 2. 獲取公司持倉資料
+        t_res = requests.get(t_url, timeout=10).json()
         jpy_to_usd = get_jpy_exchange_rate()
         companies = t_res.get('companies', [])[:5]
         structured_data = []
@@ -45,7 +53,7 @@ def fetch_data_from_coingecko():
             name_upper = co['name'].upper()
             yf_symbol = str(co['symbol']).upper().replace(".US", "")
             
-            # 符號對應邏輯
+            # 符號對應邏輯 (保持不變)
             if "METAPLANET" in name_upper or "3350" in yf_symbol:
                 yf_symbol = "3350.T"
             elif "MICROSTRATEGY" in name_upper:
@@ -54,13 +62,13 @@ def fetch_data_from_coingecko():
                 yf_symbol = "MARA"
 
             try:
-                # 這裡會比較慢，因為 yf.info 會請求大量資料
                 ticker = yf.Ticker(yf_symbol)
+                # 使用 fast_info 加速獲取市值
                 info = ticker.info
                 raw_mkt_cap = info.get('marketCap') or info.get('enterpriseValue') or 0
                 currency = info.get('currency', 'USD')
 
-                # 單位轉換
+                # 單位轉換與指標計算
                 mkt_cap_usd = raw_mkt_cap * jpy_to_usd if currency == 'JPY' else raw_mkt_cap
                 holdings = co.get('total_holdings', 0)
                 nav_usd = holdings * btc_price
@@ -73,7 +81,7 @@ def fetch_data_from_coingecko():
                     "value_usd": round(nav_usd, 2),
                     "mkt_cap": round(mkt_cap_usd, 2),
                     "mnav": round(mnav, 2),
-                    "btc_price": btc_price,
+                    "btc_price": btc_price, # 這裡現在是 yfinance 提供的高頻價格
                     "currency": currency
                 })
             except Exception as e:
@@ -82,6 +90,7 @@ def fetch_data_from_coingecko():
                 
         return structured_data
     except Exception as e:
+        print(f"Fetch Data Error: {e}")
         return {"error": str(e)}
 
 def fetch_market_indicators():
