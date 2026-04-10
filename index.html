@@ -142,9 +142,20 @@
                 const response = await fetch('https://datco-backend.onrender.com/api/treasury');
                 const data = await response.json();
 
-                // 1. 更新比特幣價格與幣價相關指標
-                const btcPrice = data.companies[0].btc_price;
-                document.getElementById('btc-price').innerText = `$${btcPrice.toLocaleString()}`;
+                // 1. 先抓取比特幣價格 (新增防呆檢查)
+                let btcPrice = 0;
+                if (data.companies && data.companies.length > 0) {
+                    btcPrice = data.companies[0].btc_price;
+                } else if (data.network && data.network.btc_price) { // 備援路徑
+                    btcPrice = data.network.btc_price;
+                }
+
+                // 如果真的有抓到價格，才更新 UI
+                if (btcPrice > 0) {
+                    document.getElementById('btc-price').innerText = `$${btcPrice.toLocaleString()}`;
+                } else {
+                    document.getElementById('btc-price').innerText = "加載中...";
+                }
 
                 // 2. 更新挖礦經濟學 (Mining Economics)
                 const network = data.network;
