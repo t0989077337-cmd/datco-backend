@@ -139,7 +139,7 @@
     <script>
         async function updateDashboard() {
             try {
-                const response = await fetch('https://datco-backend.onrender.com');
+                const response = await fetch('https://datco-backend.onrender.com/api/treasury');
                 const data = await response.json();
 
                 // 1. 更新比特幣價格與幣價相關指標
